@@ -13,10 +13,11 @@
 /*-----------------------------------------------------------------------------
  Section: Macro Definitions
  ----------------------------------------------------------------------------*/
-#define DEFAULT_CFG_FILE        "/etc/wowifi.txt"          /**< 默认配置文件 */
 #ifdef __WIN32
+#define DEFAULT_CFG_FILE        "./wowifi.txt"          /**< 默认配置文件 */
 #define DEFAULT_LOG_FILE_NAME   "./wowifi.log"          /**< 默认日志文件 */
 #else
+#define DEFAULT_CFG_FILE        "/etc/wowifi.txt"          /**< 默认配置文件 */
 #define DEFAULT_LOG_FILE_NAME   "/tmp/wowifi.log"       /**< 默认日志文件 */
 #endif
 #define DEFAULT_LOG_ON          (1u)                    /**< 默认打开日志记录 */

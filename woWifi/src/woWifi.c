@@ -51,7 +51,7 @@ static char the_mac[18];
 static char the_token[128];
 static char the_info[128];
 
-static char the_buf[4096];
+static char the_buf[4096 * 2];
 
 /*-----------------------------------------------------------------------------
  Section: Local Function Prototypes
@@ -101,7 +101,7 @@ is_relink(void)
     sendlen = strlen(psend);
     if (sendlen != socket_send(sfd, psend, sendlen))
     {
-        printf("%s发送数据数据出错\n", __FUNCTION__);
+        log_print("%s发送数据数据出错\n", __FUNCTION__);
         return ret;
     }
 
@@ -199,7 +199,7 @@ get_info(char *gw,
     sendlen = strlen(pinfo);
     if (sendlen != socket_send(sfd, pinfo, sendlen))
     {
-        printf("%s发送数据数据出错\n", __FUNCTION__);
+        log_print("%s发送数据数据出错\n", __FUNCTION__);
         return ret;
     }
 
@@ -232,7 +232,7 @@ get_info(char *gw,
             ret = 1;
             break;
         }
-//        printf("%s", the_buf);
+//        log_print("%s", the_buf);
         memset(the_buf, 0x00, sizeof(the_buf));
     }
 
@@ -246,6 +246,7 @@ get_info(char *gw,
  * @brief   获取cookie
  * @param[in]  sfd      : sock fd
  * @param[out] *cookie  : cookie
+ * @param[out] *t       : t
  *
  * @retval  1 : 成功
  * @retval  0 : 失败
@@ -256,7 +257,8 @@ get_info(char *gw,
 int
 get_cookie(unsigned int sfd,
         char *cookie,
-        int maxlen)
+        int maxlen,
+        time_t *t)
 {
     /**
      *  1. 网关地址
@@ -277,8 +279,12 @@ get_cookie(unsigned int sfd,
             "\r\n";
     char *pcookie = NULL;
     char *ppath = NULL;
+    char *ptime_start = NULL;
     int sendlen = 0;
     int ret = 0;
+
+    *cookie = 0;
+    *t = 0;
 
     //todo: get_info
     snprintf(the_buf, sizeof(the_buf), psend,
@@ -300,14 +306,14 @@ get_cookie(unsigned int sfd,
     sendlen = strlen(the_buf) + 1;
     if (sendlen != socket_send(sfd, the_buf, sendlen))
     {
-        printf("%s发送数据数据出错\n", __FUNCTION__);
+        log_print("%s发送数据数据出错\n", __FUNCTION__);
         return ret;
     }
 
     while (0 < socket_recv(sfd, the_buf, sizeof(the_buf)))
     {
         pcookie = strstr(the_buf, "PHPSESSID=");
-        if (pcookie)
+        if (pcookie && !cookie[0])
         {
             ppath = strstr(the_buf, "; path=/");
             if (ppath)
@@ -316,13 +322,30 @@ get_cookie(unsigned int sfd,
                 strncpy(cookie, pcookie + strlen("PHPSESSID="), maxlen);
                 ret = 1;
             }
-//            while (0 < socket_recv(sfd, the_buf, sizeof(the_buf)));
-            break;
         }
+        ptime_start = strstr(the_buf, "name=\"page_time\" value=\"");//1435744862" />")
+        if (ptime_start && !t[0])
+        {
+            ptime_start += strlen("name=\"page_time\" value=\"");
+            if ((*ptime_start >= '0') && (*ptime_start <= '9'))
+            {
+                for (ret = 0; ret < 20; ret++)
+                {
+                    if (ptime_start[ret] == '"')
+                    {
+                        ptime_start[ret] = 0;
+                        break;
+                    }
+                }
+                *t = atoi(ptime_start);
+            }
+        }
+
+        memset(the_buf, 0x00, sizeof(the_buf));
     }
 
 
-    return ret;
+    return (*t && *cookie) ? 1 : 0;
 }
 
 /**
@@ -418,9 +441,10 @@ dial_up(const char *username,
     int ret = 0;
     unsigned int sfd = 0;
     char *pmac;
+    time_t myt;
 
     get_info(the_gw_address, &the_gw_port, the_gw_id, the_ip, the_mac);
-    printf("\ngw:%s  port:%d id:%s ip:%s mac:%s\n", the_gw_address, the_gw_port, the_gw_id, the_ip, the_mac);
+    log_print("\ngw:%s  port:%d id:%s ip:%s mac:%s\n", the_gw_address, the_gw_port, the_gw_id, the_ip, the_mac);
 //return 0;
     sfd = socket_init(SERVER_URL, 80);
 
@@ -429,9 +453,9 @@ dial_up(const char *username,
         return ret;
     }
 
-    if (get_cookie(sfd, the_cookie, sizeof(the_cookie)))
+    if (get_cookie(sfd, the_cookie, sizeof(the_cookie), &myt))
     {
-//        printf("cookie:%s\n", the_cookie);
+//        log_print("cookie:%s\n", the_cookie);
         pmac = url_encode(the_mac);
         snprintf(content, sizeof(content), pcontent,
                 the_gw_id,
@@ -439,7 +463,7 @@ dial_up(const char *username,
                 the_gw_port,
                 the_ip,
                 pmac,
-                time(NULL),
+                myt + 5,
                 the_gw_address,
                 the_gw_port,
                 the_gw_id,
@@ -448,7 +472,8 @@ dial_up(const char *username,
                 username,
                 password);
         free(pmac);
-//        printf("content:%s", content);
+        log_print("t:%d\n", time(NULL));
+//        log_print("content:%s", content);
 
         len = strlen(content);
 
@@ -475,7 +500,7 @@ dial_up(const char *username,
         if (len != socket_send(sfd, the_buf, len))
         {
             socket_close(sfd);
-            printf("%s发送数据数据出错\n", __FUNCTION__);
+            log_print("%s发送数据数据出错\n", __FUNCTION__);
             return ret;
         }
 //        Sleep(1);
@@ -487,7 +512,7 @@ dial_up(const char *username,
             {
                 if (pstatus[10] == '1')
                 {
-                    printf("密码认证成功!\n");
+                    log_print("密码认证成功!\n");
                     ptoken = strstr(the_buf, "?token=");
                     pinfo = strstr(the_buf, "&info=");
                     pend = strstr(the_buf, "\",\"data\":");
@@ -498,8 +523,8 @@ dial_up(const char *username,
                         *pend = 0;
                         strncpy(the_token, ptoken + 7, sizeof(the_token));
                         strncpy(the_info, pinfo + 6, sizeof(the_info));
-//                        printf("token:%s\n", the_token);
-//                        printf("info:%s\n", the_info);
+//                        log_print("token:%s\n", the_token);
+//                        log_print("info:%s\n", the_info);
                         //告诉wifidog网关，token和info
                         socket_close(sfd);
 
@@ -514,7 +539,7 @@ dial_up(const char *username,
                         len = strlen(the_buf);
                         if (len != socket_send(sfd, the_buf, len))
                         {
-                            printf("%s发送数据数据出错\n", __FUNCTION__);
+                            log_print("%s发送数据数据出错\n", __FUNCTION__);
                             socket_close(sfd);
                             return ret;
                         }
@@ -536,29 +561,33 @@ dial_up(const char *username,
                         len = strlen(the_buf);
                         if (len != socket_send(sfd, the_buf, len))
                         {
-                            printf("%s发送数据数据出错\n", __FUNCTION__);
+                            log_print("%s发送数据数据出错\n", __FUNCTION__);
                             socket_close(sfd);
                             return ret;
                         }
 
                         while (0 < socket_recv(sfd, the_buf, sizeof(the_buf)));
 #endif
-                        printf("拨号成功!\n");
+                        log_print("拨号成功!\n");
                         ret = 1;
                         break;
                     }
                     else
                     {
-                        printf("bug[%d]\n", __LINE__);
+                        log_print("bug[%d]\n", __LINE__);
                     }
                 }
                 else
                 {
-                    printf("密码认证失败!\n");
+                    log_print("密码认证失败!\n");
                 }
             }
             memset(the_buf, 0x00, sizeof(the_buf));
         }
+    }
+    else
+    {
+        log_print("bug[%d] cookie get err!\n", __LINE__);
     }
 
     socket_close(sfd);

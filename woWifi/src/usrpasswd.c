@@ -14,6 +14,7 @@
  ----------------------------------------------------------------------------*/
 #include <stdio.h>
 #include "config.h"
+#include "log.h"
 
 /*-----------------------------------------------------------------------------
  Section: Type Definitions
@@ -96,7 +97,7 @@ get_usrpw(int pos,
     fd = fopen(DEFAULT_CFG_FILE, "r");
     if (!fd)
     {
-        printf("未发现用户名配置文件!\n");
+        log_print("未发现用户名配置文件!\n");
         return ret;
     }
 

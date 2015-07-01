@@ -108,7 +108,7 @@ unsigned int socket_init(const char *pHostName, unsigned short port)
         if (connect(sockfd, (struct sockaddr *)(&server_addr),
                 sizeof(struct sockaddr)) == -1)
         {
-            printf("connect error\n");
+            log_print("connect error\n");
             break;
         }
 #ifdef __WIN32
