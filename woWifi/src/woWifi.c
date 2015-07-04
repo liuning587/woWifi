@@ -5,7 +5,7 @@
  * @details   This file including all API functions's 
  *            implement of woWifi.c.	
  *
- * @copyright Copyrigth(C), 2008-2012,Sanxing Electric Co.,Ltd.
+ * @copyright 
  ******************************************************************************
  */
  
