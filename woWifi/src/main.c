@@ -62,6 +62,10 @@ extern int
 get_usrpw(int pos,
         char *usr,
         char *pw);
+
+extern void
+set_device(const char *p);
+
 //http://172.16.1.1:8060/wifidog/auth?token=9bfb373578a9cfad957d25fa22d44898019b1a6e&info=MiTfgi2wNgjc4OTkwNjUsLDIwMTUwNjMwMTgzMTAz
 /*-----------------------------------------------------------------------------
  Section: Function Definitions
@@ -69,12 +73,15 @@ get_usrpw(int pos,
 int
 main(int argc, char ** argv)
 {
-    int pos = 0;
-    int err_cnt = 0;
+    int dev = 0;
+    int pos[2] = {0, 0};
+    int err_cnt[2] = {0, 0};
 
+    const char *pdevice[2] = {"apcli0", "eth0.2"};
     char usr[64], pw[64];
 
     log_init();
+    set_device(pdevice[dev]);
 
     while (1)
     {
@@ -82,35 +89,35 @@ __fast_start:
         /* 检测是否重新映射*/
         if (is_relink())
         {
-            if (!err_cnt)
-                log_print("lost!\n");
-            /* 检测网关是否存在 */
-//            if (is_gw_ok())
+            if (!err_cnt[dev])
+            {
+                log_print("dev:%s lost!\n", pdevice[dev]);
+            }
             {
                 /* 取用户名 密码 */
-                if (get_usrpw(pos, usr, pw))
+                if (get_usrpw(dev, usr, pw))  //dev fixme : 现在只取2个密码
                 {
                     /* 尝试拨号 */
                     if (dial_up(usr, pw))
                     {
                         log_print("dial up success!,usr:%s pw:%s!\n", usr, pw);
-                        err_cnt = 0;
+                        err_cnt[dev] = 0;
                     }
                     else
                     {
                         log_print("dial up failed,usr:%s pw:%s!\n", usr, pw);
-                        err_cnt++;
-                        if (err_cnt % 3 == 0) //3次失败
+                        err_cnt[dev]++;
+                        if (err_cnt[dev] % 3 == 0) //3次失败
                         {
                             goto __fast_start;
                         }
                         else
                         {
-                            pos++;
+                            pos[dev]++;
 #ifdef __WIN32
-                            Sleep(1 + err_cnt / 64);
+                            Sleep(1 + err_cnt[dev] / 64);
 #else
-                            sleep(1 + err_cnt / 64);
+                            sleep(1 + err_cnt[dev] / 64);
 #endif
                             //todo: sleep 10s 防止太频繁认证服务器压力太大
                             //10 + err_cnt / 64
@@ -123,10 +130,13 @@ __fast_start:
                 }
             }
         }
+        dev++;
+        dev &= 1;
+        set_device(pdevice[dev]);   //切换网卡,这里代码写的太死了不太好!
 #ifdef __WIN32
-        Sleep(5);
+        Sleep(2);
 #else
-        sleep(5);
+        sleep(2);
 #endif
     }
 }

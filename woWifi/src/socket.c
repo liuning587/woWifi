@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #endif
 
 #include "log.h"
@@ -43,7 +44,7 @@
 /*-----------------------------------------------------------------------------
  Section: Local Variables
  ----------------------------------------------------------------------------*/
-/* NONE */
+static const char *pdevice = NULL;
 
 /*-----------------------------------------------------------------------------
  Section: Local Function Prototypes
@@ -53,6 +54,12 @@
 /*-----------------------------------------------------------------------------
  Section: Function Definitions
  ----------------------------------------------------------------------------*/
+void
+set_device(const char *p)
+{
+    pdevice = p;
+}
+
 /**
  ******************************************************************************
  * @brief      套接字初始化
@@ -72,8 +79,10 @@ unsigned int socket_init(const char *pHostName, unsigned short port)
     int time_out = 1000 * 15; //超时15s
 #else
     int sockfd = -1;
-    struct sockaddr_in server_addr;struct
-    timeval timeout = {3,0};
+    struct sockaddr_in client_addr;
+    struct sockaddr_in server_addr;
+    struct timeval timeout = {3,0};
+    struct ifreq select_if;
 #endif
     struct hostent *host;
 
@@ -96,9 +105,22 @@ unsigned int socket_init(const char *pHostName, unsigned short port)
 
         if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
         {
-//            log_print("socket error:%s\a\n", strerror(errno));
+            log_print("socket error\n");
             break;
         }
+#ifndef __WIN32
+        //绑定本地网卡
+        if (pdevice)
+        {
+            strncpy(select_if.ifr_name, pdevice, sizeof(select_if.ifr_name));
+            if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE,
+                          (char *)&select_if, sizeof(select_if)) < 0)
+            {
+                log_print("setsockopt error\n");
+                break;
+            }
+        }
+#endif
 
         memset(&server_addr, 0x00, sizeof(server_addr));
         server_addr.sin_family = AF_INET;
